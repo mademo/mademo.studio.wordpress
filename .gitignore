@@ -8,6 +8,7 @@ node_modules/
 /dist/
 .vite/
 coverage/
+/releases/*.zip
 
 # WordPress / local deployment artifacts
 wordpress/theme/mademo/dist/
@@ -17,6 +18,7 @@ wordpress/plugin/mademo-studio/.cache/
 # OS / editor artifacts
 .DS_Store
 Thumbs.db
+.history/
 .vscode/
 .idea/
 *.swp

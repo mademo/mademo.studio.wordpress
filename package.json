@@ -8,7 +8,7 @@
     "build:wp": "BUILD_TARGET=wordpress vite build",
     "package:wp": "./scripts/package-wordpress.sh",
     "package:wp:fast": "./scripts/package-wordpress.sh --no-build",
-    "dev:local": "BUILD_TARGET=wordpress vite build && cp -r wordpress/theme/mademo/dist \"/Users/mademo/Library/Application Support/Local/sites/mademo-studio/app/public/wp-content/themes/mademo/dist\"",
+    "dev:local": "BUILD_TARGET=wordpress vite build && rm -rf \"/Users/mademo/Library/Application Support/Local/sites/mademo-studio/app/public/wp-content/themes/mademo/dist\" && cp -r wordpress/theme/mademo/dist \"/Users/mademo/Library/Application Support/Local/sites/mademo-studio/app/public/wp-content/themes/mademo/dist\"",
     "deploy:plugin": "cp -r wordpress/plugin/mademo-studio \"/Users/mademo/Library/Application Support/Local/sites/mademo-studio/app/public/wp-content/plugins/\"",
     "deploy:theme": "cp -r wordpress/theme/mademo \"/Users/mademo/Library/Application Support/Local/sites/mademo-studio/app/public/wp-content/themes/\"",
     "deploy:all": "pnpm deploy:plugin && pnpm deploy:theme && pnpm dev:local",
