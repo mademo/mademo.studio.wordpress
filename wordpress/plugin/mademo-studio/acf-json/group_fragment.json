@@ -1,0 +1,27 @@
+{
+  "key": "group_fragment",
+  "title": "Fragment — Informations",
+  "fields": [
+    { "key": "field_frag_number",   "label": "Numéro",           "name": "number",   "type": "text",    "placeholder": "F.001", "wrapper": { "width": "25" } },
+    { "key": "field_frag_date",     "label": "Date de création", "name": "date",     "type": "text",    "placeholder": "ex: 10 jan. 2025", "wrapper": { "width": "35" } },
+    {
+      "key":           "field_frag_projects",
+      "label":         "Projets associés",
+      "name":          "project_ids",
+      "type":          "relationship",
+      "post_type":     [ "mademo_project" ],
+      "return_format": "id",
+      "filters":       [ "search" ],
+      "min":           0,
+      "max":           "",
+      "wrapper":       { "width": "100" }
+    },
+    { "key": "field_frag_keywords", "label": "Mots-clés (séparés par virgule)", "name": "keywords", "type": "text" }
+  ],
+  "location": [ [ { "param": "post_type", "operator": "==", "value": "mademo_fragment" } ] ],
+  "menu_order": 0,
+  "position": "normal",
+  "style": "default",
+  "label_placement": "top",
+  "active": true
+}

@@ -1,0 +1,36 @@
+# Node / package manager
+node_modules/
+.pnpm-store/
+.npm/
+.pnpm-debug.log*
+
+# Build outputs
+/dist/
+.vite/
+coverage/
+
+# WordPress / local deployment artifacts
+wordpress/theme/mademo/dist/
+wordpress/theme/mademo/.cache/
+wordpress/plugin/mademo-studio/.cache/
+
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp

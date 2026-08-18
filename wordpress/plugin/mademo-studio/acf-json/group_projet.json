@@ -1,0 +1,75 @@
+{
+  "key": "group_projet",
+  "title": "Projet — Informations",
+  "fields": [
+    { "key": "field_projet_category",    "label": "Catégorie courte",        "name": "category",      "type": "text",     "placeholder": "ex: anim. / install. / rech." },
+    { "key": "field_projet_year",        "label": "Année",                   "name": "year",          "type": "text",     "placeholder": "2024 ou 2021–" },
+    { "key": "field_projet_question",    "label": "Question centrale",            "name": "question",      "type": "textarea", "rows": 2 },
+    { "key": "field_projet_manifeste",   "label": "Phrase manifeste",             "name": "manifeste",     "type": "textarea", "rows": 2, "instructions": "Une phrase courte, poétique. Apparaît sur les cartes." },
+    { "key": "field_projet_last_updated","label": "Dernière mise à jour","name": "last_updated",  "type": "text",     "placeholder": "ex: 12 jan. 2025" },
+    { "key": "field_projet_tags",        "label": "Tags (séparés par virgule)", "name": "tags",   "type": "text",     "placeholder": "Animation, Corps, Narration" },
+    {
+      "key": "field_maintenant",
+      "label": "— Maintenant",
+      "name": "maintenant",
+      "type": "group",
+      "layout": "block",
+      "instructions": "Décrit l’état actuel du projet.",
+      "sub_fields": [
+        { "key": "field_maint_cherche",   "label": "Ce que je cherche",       "name": "cherche",   "type": "textarea", "rows": 2 },
+        { "key": "field_maint_avancee",   "label": "Dernière avancée","name": "avancee",   "type": "textarea", "rows": 2 },
+        { "key": "field_maint_bloque",    "label": "Ce qui bloque",           "name": "bloque",    "type": "textarea", "rows": 2, "instructions": "Laisser vide si rien ne bloque." },
+        { "key": "field_maint_prochaine", "label": "Prochaine étape",    "name": "prochaine", "type": "textarea", "rows": 2 },
+        { "key": "field_maint_question",  "label": "Question encore ouverte","name": "question",  "type": "textarea", "rows": 2 }
+      ]
+    },
+    {
+      "key": "field_journal",
+      "label": "— Journal",
+      "name": "journal",
+      "type": "repeater",
+      "layout": "block",
+      "button_label": "+ Ajouter une entrée",
+      "sub_fields": [
+        { "key": "field_journal_date",    "label": "Date",    "name": "date",    "type": "text",     "wrapper": { "width": "20" } },
+        { "key": "field_journal_title",   "label": "Titre",   "name": "title",   "type": "text",     "wrapper": { "width": "80" } },
+        { "key": "field_journal_content", "label": "Contenu", "name": "content", "type": "textarea", "rows": 3 },
+        {
+          "key": "field_journal_type",
+          "label": "Type",
+          "name": "type",
+          "type": "select",
+          "choices": {
+            "découverte":      "Découverte",
+            "hypothèse":       "Hypothèse",
+            "expérimentation": "Expérimentation",
+            "résultat":        "Résultat",
+            "difficulté":      "Difficulté",
+            "décision":        "Décision"
+          },
+          "default_value": "découverte",
+          "wrapper": { "width": "30" }
+        }
+      ]
+    },
+    {
+      "key": "field_references",
+      "label": "— Références bibliographiques",
+      "name": "references",
+      "type": "repeater",
+      "layout": "table",
+      "button_label": "+ Ajouter une référence",
+      "sub_fields": [
+        { "key": "field_ref_title",  "label": "Titre",  "name": "title",  "type": "text", "wrapper": { "width": "60" } },
+        { "key": "field_ref_author", "label": "Auteur", "name": "author", "type": "text", "wrapper": { "width": "25" } },
+        { "key": "field_ref_year",   "label": "Année",  "name": "year",   "type": "text", "wrapper": { "width": "15" } }
+      ]
+    }
+  ],
+  "location": [ [ { "param": "post_type", "operator": "==", "value": "mademo_project" } ] ],
+  "menu_order": 0,
+  "position": "normal",
+  "style": "default",
+  "label_placement": "top",
+  "active": true
+}

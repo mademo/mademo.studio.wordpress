@@ -1,0 +1,24 @@
+{
+  "key": "group_research",
+  "title": "Recherche — Informations",
+  "fields": [
+    { "key": "field_res_last_updated",   "label": "Dernière mise à jour", "name": "last_updated",   "type": "text",   "placeholder": "ex: 8 jan. 2025" },
+    { "key": "field_res_fragment_count", "label": "Nombre de fragments",  "name": "fragment_count", "type": "number", "min": 0 },
+    {
+      "key":           "field_res_projects",
+      "label":         "Projets associés",
+      "name":          "project_ids",
+      "type":          "relationship",
+      "post_type":     [ "mademo_project" ],
+      "return_format": "id",
+      "filters":       [ "search" ]
+    }
+  ],
+  "location": [ [ { "param": "post_type", "operator": "==", "value": "mademo_research" } ] ],
+  "menu_order": 0,
+  "position": "normal",
+  "style": "default",
+  "label_placement": "top",
+  "active": true,
+  "instructions": "Le Titre du post EST la question de recherche."
+}

@@ -1,0 +1,26 @@
+{
+  "key": "group_text",
+  "title": "Texte — Informations",
+  "fields": [
+    { "key": "field_text_date",     "label": "Date de publication", "name": "date",      "type": "text",     "placeholder": "Mars 2024",             "wrapper": { "width": "30" } },
+    { "key": "field_text_type",     "label": "Type de texte",       "name": "type",      "type": "text",     "placeholder": "Essai, Fragment littéraire…", "wrapper": { "width": "40" } },
+    { "key": "field_text_readtime", "label": "Temps de lecture",    "name": "read_time", "type": "text",     "placeholder": "8 min",                 "wrapper": { "width": "30" } },
+    { "key": "field_text_excerpt",  "label": "Extrait (accroche)",  "name": "excerpt",   "type": "textarea", "rows": 3, "instructions": "Phrase d'accroche visible avant ouverture du texte." },
+    {
+      "key":           "field_text_project",
+      "label":         "Projet lié",
+      "name":          "related_project_id",
+      "type":          "relationship",
+      "post_type":     [ "mademo_project" ],
+      "return_format": "id",
+      "max":           1,
+      "filters":       [ "search" ]
+    }
+  ],
+  "location": [ [ { "param": "post_type", "operator": "==", "value": "mademo_text" } ] ],
+  "menu_order": 0,
+  "position": "normal",
+  "style": "default",
+  "label_placement": "top",
+  "active": true
+}
