@@ -92,15 +92,19 @@ Le front-end est une SPA React 18 basée sur Vite et Tailwind CSS v4. WordPress 
 
 ## Installation locale
 
-### 1. Installer les dépendances
+### Installation complète en une commande
 
 ```bash
-pnpm install
+cp .env.example .env.local
+# Adapter MADEMO_WP_ROOT et MADEMO_WP_URL dans .env.local
+pnpm wp:setup
 ```
 
-> Sur certaines versions de pnpm, il faut approuver les scripts natives de build avant l'installation : `pnpm approve-builds --all`.
+Cette commande installe les dépendances, construit React, sauvegarde l'installation locale précédente, synchronise le thème et l'extension, les active avec WP-CLI, régénère les permaliens et vérifie la page d'accueil ainsi que l'API REST. En cas d'échec, les fichiers précédents sont restaurés.
 
-### 2. Lancer le projet en mode développement
+> Dans Local, lancer la commande depuis **Open Site Shell** afin que WP-CLI et la configuration PHP du site soient disponibles.
+
+### Développement React sans WordPress
 
 ```bash
 pnpm dev
@@ -108,21 +112,14 @@ pnpm dev
 
 L'application est ensuite accessible sur `http://localhost:5173` et fonctionne avec les données de secours de `src/lib/fallback-data.ts`.
 
-### 3. Builder pour WordPress
+### Commandes quotidiennes
 
 ```bash
-BUILD_TARGET=wordpress pnpm build
+pnpm wp:deploy        # build + thème + extension + contrôles
+pnpm deploy:theme     # build + thème uniquement
+pnpm deploy:plugin    # extension uniquement
+pnpm wp:check         # contrôle l'installation sans la modifier
 ```
-
-Le bundle est généré dans `wordpress/theme/mademo/dist/`.
-
-### 4. Déployer le thème et le plugin localement
-
-```bash
-pnpm deploy:all
-```
-
-Cette commande copie le plugin, le thème et le build vers l'installation WordPress locale configurée dans `package.json` (`deploy:plugin`, `deploy:theme`, `dev:local`). Ajustez les chemins si votre environnement local diffère.
 
 ---
 
@@ -135,10 +132,10 @@ push → main
   └─ GitHub Actions (.github/workflows/deploy.yml)
        1. pnpm install
        2. BUILD_TARGET=wordpress pnpm build
-       3. Génération d'un manifest de déploiement
-       4. Création d'un ZIP signé HMAC-SHA256
+       3. Validation du manifest et des assets Vite
+       4. Création du ZIP + signature HMAC-SHA256
        5. POST /mademo/v1/deploy
-       6. Upload artifact GitHub (30 jours)
+       6. Conservation de l'artifact GitHub (30 jours)
   └─ WordPress reçoit le ZIP
        • Vérifie la signature
        • Stocke dans wp-content/uploads/mademo-deploys/
@@ -146,6 +143,7 @@ push → main
   └─ Admin WordPress → Mademo Studio → Déploiements
        • [✓ Appliquer] → extrait dist/ dans le thème
        • [✗ Rejeter] → supprime le ZIP, aucun impact sur le site
+       • [↩ Restaurer] → remet le bundle précédemment sauvegardé
 ```
 
 ### Configuration initiale (à faire une fois)
@@ -168,7 +166,9 @@ push → main
 
 ### Rollback
 
-Chaque build validé est conservé dans l'historique. En cas de régression, il suffit d'appliquer le build précédent depuis la page Déploiements.
+Avant chaque application, le bundle actif est déplacé dans une sauvegarde. En cas de régression, utiliser **Restaurer** sur le dernier build appliqué depuis **Mademo Studio → Déploiements**. Seul le dernier déploiement disposant d'une sauvegarde peut être annulé, ce qui évite de restaurer les versions dans le désordre.
+
+Le workflow transmet automatiquement un **candidat** après chaque push sur `main`, mais ne le rend jamais visible tout seul : la validation WordPress reste obligatoire.
 
 ---
 

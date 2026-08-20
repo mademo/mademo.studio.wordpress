@@ -1,0 +1,101 @@
+name: WordPress production candidate
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mademo-production-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-send:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_URL: ${{ secrets.MADEMO_DEPLOY_URL }}
+      DEPLOY_SECRET: ${{ secrets.MADEMO_DEPLOY_SECRET }}
+      DEPLOY_MESSAGE: ${{ github.event.head_commit.message || format('Déploiement manuel de {0}', github.sha) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build WordPress bundle
+        run: pnpm build:wp
+
+      - name: Verify Vite bundle
+        run: node scripts/verify-dist.mjs wordpress/theme/mademo/dist
+
+      - name: Create signed deployment archive
+        run: |
+          mkdir -p releases
+          (
+            cd wordpress/theme/mademo
+            zip -qr "$GITHUB_WORKSPACE/releases/mademo-dist-${GITHUB_SHA::7}.zip" dist
+          )
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mademo-dist-${{ github.sha }}
+          path: releases/mademo-dist-*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Send candidate to WordPress
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEPLOY_URL" || -z "$DEPLOY_SECRET" ]]; then
+            echo "MADEMO_DEPLOY_URL et MADEMO_DEPLOY_SECRET doivent être configurés dans GitHub Actions." >&2
+            exit 1
+          fi
+
+          archive="$(find releases -maxdepth 1 -name 'mademo-dist-*.zip' -print -quit)"
+          signature="$(openssl dgst -sha256 -hmac "$DEPLOY_SECRET" -binary "$archive" | xxd -p -c 256)"
+          response_file="$(mktemp)"
+
+          http_status="$(curl --silent --show-error --location \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --request POST "$DEPLOY_URL" \
+            --header "X-Mademo-Deploy-Signature: sha256=${signature}" \
+            --header "X-Mademo-Deploy-Commit: ${GITHUB_SHA}" \
+            --header "X-Mademo-Deploy-Branch: ${GITHUB_REF_NAME}" \
+            --header "X-Mademo-Deploy-Actor: ${GITHUB_ACTOR}" \
+            --header "X-Mademo-Deploy-Workflow: ${GITHUB_RUN_ID}" \
+            --form "dist_zip=@${archive};type=application/zip" \
+            --form "message=${DEPLOY_MESSAGE}")"
+
+          if [[ ! "$http_status" =~ ^2 ]]; then
+            echo "WordPress a refusé le build (HTTP ${http_status})." >&2
+            sed -n '1,20p' "$response_file" >&2
+            exit 1
+          fi
+
+          node - "$response_file" <<'NODE'
+          const fs = require('fs');
+          const response = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (response.success !== true || !response.deploy_id) {
+            throw new Error('Réponse WordPress invalide : le build n’est pas en attente');
+          }
+          console.log(`Build ${response.deploy_id} transmis et en attente de validation dans WordPress.`);
+          NODE

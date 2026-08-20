@@ -101,7 +101,8 @@ if [[ ! -f "${MANIFEST}" ]]; then
   error "Le build semble incomplet. Relancez sans --no-build."
   exit 1
 fi
-success "Manifest Vite trouvé."
+pnpm verify:wp
+success "Manifest Vite et assets validés."
 
 # ── Étape 2 : Préparer le dossier releases/ ───────────────────────────────────
 
