@@ -162,6 +162,10 @@ function mademo_deploys_page(): void {
         $sha = esc_html( $_GET['commit'] ?? '' );
         echo "<div class='notice notice-success is-dismissible'><p>✓ Build <code>{$sha}</code> appliqué — thème mis à jour.</p></div>";
     }
+    if ( ! empty( $_GET['rolled_back'] ) ) {
+        $sha = esc_html( $_GET['commit'] ?? '' );
+        echo "<div class='notice notice-success is-dismissible'><p>↩ Retour arrière effectué depuis le build <code>{$sha}</code>.</p></div>";
+    }
     if ( ! empty( $_GET['rejected'] ) ) {
         echo "<div class='notice notice-warning is-dismissible'><p>Build rejeté et supprimé.</p></div>";
     }
@@ -172,13 +176,19 @@ function mademo_deploys_page(): void {
             'zip_error'       => 'Impossible d\'ouvrir le fichier ZIP (corrompu ?).',
             'unsafe_zip'      => 'ZIP rejeté : chemin suspect (traversée de répertoire).',
             'no_dist_folder'  => 'Le ZIP ne contient pas de dossier <code>dist/</code>.',
+            'invalid_build'   => 'Le bundle est incomplet : manifeste Vite ou assets manquants.',
+            'backup_failed'   => 'Impossible de mettre la version actuelle à l’abri.',
+            'apply_failed'    => 'Impossible d’installer le nouveau bundle. L’ancienne version a été restaurée.',
+            'rollback_absent' => 'Aucune sauvegarde utilisable pour ce déploiement.',
+            'rollback_order'  => 'Seul le dernier déploiement appliqué peut être annulé.',
         ];
         $msg = $errors[ sanitize_key( $_GET['error'] ) ] ?? 'Erreur inconnue.';
         echo "<div class='notice notice-error is-dismissible'><p>❌ {$msg}</p></div>";
     }
 
-    $pending  = array_values( array_filter( $queue, fn( $d ) => $d['status'] === 'pending' ) );
-    $history  = array_reverse( array_values( array_filter( $queue, fn( $d ) => $d['status'] !== 'pending' ) ) );
+    $pending            = array_values( array_filter( $queue, fn( $d ) => $d['status'] === 'pending' ) );
+    $latest_rollback_id = mademo_latest_rollback_id( $queue );
+    $history            = array_reverse( array_values( array_filter( $queue, fn( $d ) => $d['status'] !== 'pending' ) ) );
     $history  = array_slice( $history, 0, 15 );
 
     // ── HTML ───────────────────────────────────────────────────────────────────
@@ -317,11 +327,12 @@ function mademo_deploys_page(): void {
                 </thead>
                 <tbody>
                 <?php foreach ( $history as $deploy ) :
-                    $is_applied = $deploy['status'] === 'applied';
-                    $label      = $is_applied ? '✓ Appliqué' : '✗ Rejeté';
-                    $color      = $is_applied ? '#00a32a'    : '#d63638';
-                    $date       = $deploy['applied_at'] ?? $deploy['rejected_at'] ?? $deploy['received_at'];
-                    $by         = $deploy['applied_by']  ?? $deploy['rejected_by']  ?? '';
+                    $is_applied  = $deploy['status'] === 'applied';
+                    $is_rollback = $deploy['status'] === 'rolled_back';
+                    $label       = $is_applied ? '✓ Appliqué' : ( $is_rollback ? '↩ Restauré' : '✗ Rejeté' );
+                    $color       = $is_applied ? '#00a32a' : ( $is_rollback ? '#2271b1' : '#d63638' );
+                    $date        = $deploy['rolled_back_at'] ?? $deploy['applied_at'] ?? $deploy['rejected_at'] ?? $deploy['received_at'];
+                    $by          = $deploy['rolled_back_by'] ?? $deploy['applied_by'] ?? $deploy['rejected_by'] ?? '';
                 ?>
                     <tr>
                         <td><code style="font-size:13px"><?= esc_html( $deploy['short_sha'] ) ?></code></td>
@@ -336,7 +347,20 @@ function mademo_deploys_page(): void {
                             </span>
                         </td>
                         <td><?= esc_html( $by ) ?></td>
-                        <td><?= esc_html( $date ) ?></td>
+                        <td>
+                            <?= esc_html( $date ) ?>
+                            <?php if ( $is_applied && $deploy['id'] === $latest_rollback_id ) : ?>
+                                <form method="post"
+                                      action="<?= esc_url( admin_url( 'admin-post.php' ) ) ?>"
+                                      style="display:inline;margin-left:8px"
+                                      onsubmit="return confirm('Restaurer la version qui précédait ce build ?')">
+                                    <input type="hidden" name="action" value="mademo_rollback_deploy">
+                                    <input type="hidden" name="deploy_id" value="<?= esc_attr( $deploy['id'] ) ?>">
+                                    <?php wp_nonce_field( 'mademo_rollback_' . $deploy['id'] ); ?>
+                                    <button type="submit" class="button button-small">↩ Restaurer</button>
+                                </form>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -388,7 +412,13 @@ add_action( 'admin_post_mademo_apply_deploy', function (): void {
     // Contrôle de sécurité : aucun chemin relatif (path traversal)
     for ( $i = 0; $i < $zip->numFiles; $i++ ) {
         $name = $zip->getNameIndex( $i );
-        if ( $name === false || strpos( $name, '..' ) !== false ) {
+        if (
+            $name === false
+            || str_contains( $name, '..' )
+            || str_starts_with( $name, '/' )
+            || str_contains( $name, '\\' )
+            || preg_match( '/^[A-Za-z]:\//', $name )
+        ) {
             $zip->close();
             wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=unsafe_zip' ) );
             exit;
@@ -408,22 +438,43 @@ add_action( 'admin_post_mademo_apply_deploy', function (): void {
         exit;
     }
 
-    // Remplacer le dist/ du thème
-    $theme_dist = get_template_directory() . '/dist/';
-    if ( is_dir( $theme_dist ) ) {
-        mademo_rrmdir( $theme_dist );
+    if ( ! mademo_validate_dist( $extracted_dist ) ) {
+        mademo_rrmdir( $tmp_dir );
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=invalid_build' ) );
+        exit;
     }
-    rename( $extracted_dist, $theme_dist );
+
+    // Remplacement atomique : l'ancien dist/ est d'abord déplacé dans une sauvegarde.
+    $theme_dist  = trailingslashit( get_template_directory() ) . 'dist';
+    $backup_path = MADEMO_DEPLOY_DIR . 'backup-' . $deploy_id;
+
+    if ( is_dir( $backup_path ) ) {
+        mademo_rrmdir( $backup_path );
+    }
+
+    if ( is_dir( $theme_dist ) && ! rename( $theme_dist, $backup_path ) ) {
+        mademo_rrmdir( $tmp_dir );
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=backup_failed' ) );
+        exit;
+    }
+
+    if ( ! rename( untrailingslashit( $extracted_dist ), $theme_dist ) ) {
+        if ( is_dir( $backup_path ) ) {
+            rename( $backup_path, $theme_dist );
+        }
+        mademo_rrmdir( $tmp_dir );
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=apply_failed' ) );
+        exit;
+    }
     mademo_rrmdir( $tmp_dir );
 
-    // Invalider le cache manifest
-    wp_cache_delete( 'mademo_manifest_' . filemtime( $theme_dist . '.vite/manifest.json' ), 'mademo' );
-    wp_cache_flush_group( 'mademo' );
+    mademo_flush_deploy_cache();
 
     // Mettre à jour la file
-    $queue[ $index ]['status']     = 'applied';
-    $queue[ $index ]['applied_at'] = gmdate( 'Y-m-d H:i:s' );
-    $queue[ $index ]['applied_by'] = wp_get_current_user()->user_login;
+    $queue[ $index ]['status']      = 'applied';
+    $queue[ $index ]['applied_at']  = gmdate( 'Y-m-d H:i:s' );
+    $queue[ $index ]['applied_by']  = wp_get_current_user()->user_login;
+    $queue[ $index ]['backup_path'] = is_dir( $backup_path ) ? $backup_path : '';
 
     // Supprimer le ZIP appliqué (libérer de l'espace)
     if ( file_exists( $deploy['zip_path'] ) ) {
@@ -439,7 +490,76 @@ add_action( 'admin_post_mademo_apply_deploy', function (): void {
     exit;
 } );
 
-// ─── 4. Action : rejeter ──────────────────────────────────────────────────────
+// ─── 4. Action : restaurer la version précédente ─────────────────────────────
+
+add_action( 'admin_post_mademo_rollback_deploy', function (): void {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'Accès refusé.' );
+    }
+
+    $deploy_id = sanitize_text_field( wp_unslash( $_POST['deploy_id'] ?? '' ) );
+    check_admin_referer( 'mademo_rollback_' . $deploy_id );
+
+    $queue = get_option( MADEMO_DEPLOY_OPTION, [] );
+    $index = null;
+
+    foreach ( $queue as $i => $deploy ) {
+        if ( $deploy['id'] === $deploy_id && $deploy['status'] === 'applied' ) {
+            $index = $i;
+            break;
+        }
+    }
+
+    if ( $index === null || empty( $queue[ $index ]['backup_path'] ) || ! is_dir( $queue[ $index ]['backup_path'] ) ) {
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=rollback_absent' ) );
+        exit;
+    }
+
+    if ( mademo_latest_rollback_id( $queue ) !== $deploy_id ) {
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=rollback_order' ) );
+        exit;
+    }
+
+    $theme_dist   = trailingslashit( get_template_directory() ) . 'dist';
+    $backup_path  = $queue[ $index ]['backup_path'];
+    $current_path = MADEMO_DEPLOY_DIR . 'rollback-current-' . $deploy_id;
+
+    if ( is_dir( $current_path ) ) {
+        mademo_rrmdir( $current_path );
+    }
+
+    if ( is_dir( $theme_dist ) && ! rename( $theme_dist, $current_path ) ) {
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=backup_failed' ) );
+        exit;
+    }
+
+    if ( ! rename( $backup_path, $theme_dist ) ) {
+        if ( is_dir( $current_path ) ) {
+            rename( $current_path, $theme_dist );
+        }
+        wp_safe_redirect( admin_url( 'admin.php?page=mademo-deploys&error=apply_failed' ) );
+        exit;
+    }
+
+    if ( is_dir( $current_path ) ) {
+        mademo_rrmdir( $current_path );
+    }
+
+    $queue[ $index ]['status']         = 'rolled_back';
+    $queue[ $index ]['rolled_back_at'] = gmdate( 'Y-m-d H:i:s' );
+    $queue[ $index ]['rolled_back_by'] = wp_get_current_user()->user_login;
+    $queue[ $index ]['backup_path']    = '';
+
+    update_option( MADEMO_DEPLOY_OPTION, $queue );
+    mademo_flush_deploy_cache();
+
+    wp_safe_redirect( admin_url(
+        'admin.php?page=mademo-deploys&rolled_back=1&commit=' . urlencode( $queue[ $index ]['short_sha'] )
+    ) );
+    exit;
+} );
+
+// ─── 5. Action : rejeter ─────────────────────────────────────────────────────
 
 add_action( 'admin_post_mademo_reject_deploy', function (): void {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -469,7 +589,68 @@ add_action( 'admin_post_mademo_reject_deploy', function (): void {
     exit;
 } );
 
-// ─── 5. Nettoyage ─────────────────────────────────────────────────────────────
+// ─── 6. Validation, cache et nettoyage ────────────────────────────────────────
+
+/**
+ * Vérifie que le manifeste pointe uniquement vers des assets présents.
+ */
+function mademo_validate_dist( string $dist_dir ): bool {
+    $manifest_path = trailingslashit( $dist_dir ) . '.vite/manifest.json';
+    if ( ! is_file( $manifest_path ) ) {
+        return false;
+    }
+
+    $raw      = file_get_contents( $manifest_path );
+    $manifest = $raw ? json_decode( $raw, true ) : null;
+    if ( ! is_array( $manifest ) ) {
+        return false;
+    }
+
+    $entry = $manifest['index.html'] ?? $manifest['src/main.tsx'] ?? null;
+    if ( ! is_array( $entry ) || empty( $entry['file'] ) ) {
+        return false;
+    }
+
+    $files = array_merge( [ $entry['file'] ], $entry['css'] ?? [] );
+    foreach ( $entry['imports'] ?? [] as $import_key ) {
+        if ( empty( $manifest[ $import_key ]['file'] ) ) {
+            return false;
+        }
+        $files[] = $manifest[ $import_key ]['file'];
+    }
+
+    foreach ( $files as $file ) {
+        if ( ! is_string( $file ) || str_contains( $file, '..' ) || ! is_file( trailingslashit( $dist_dir ) . $file ) ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Dernier build appliqué disposant encore d'une sauvegarde exploitable.
+ *
+ * @param array<int,array<string,mixed>> $queue
+ */
+function mademo_latest_rollback_id( array $queue ): string {
+    for ( $i = count( $queue ) - 1; $i >= 0; $i-- ) {
+        $deploy = $queue[ $i ];
+        if (
+            ( $deploy['status'] ?? '' ) === 'applied'
+            && ! empty( $deploy['backup_path'] )
+            && is_dir( $deploy['backup_path'] )
+        ) {
+            return (string) $deploy['id'];
+        }
+    }
+
+    return '';
+}
+
+function mademo_flush_deploy_cache(): void {
+    wp_cache_flush_group( 'mademo' );
+}
 
 /**
  * Supprime les entrées rejetées en excès pour garder la file courte.
@@ -490,6 +671,9 @@ function mademo_purge_old_deploys( array &$queue ): void {
     foreach ( $to_delete as $old ) {
         if ( ! empty( $old['zip_path'] ) && file_exists( $old['zip_path'] ) ) {
             unlink( $old['zip_path'] );
+        }
+        if ( ! empty( $old['backup_path'] ) && is_dir( $old['backup_path'] ) ) {
+            mademo_rrmdir( $old['backup_path'] );
         }
     }
 

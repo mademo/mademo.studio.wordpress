@@ -132,11 +132,14 @@ Le fichier `includes/deploy.php` ajoute :
 - Liste des builds en attente avec commit, branche, auteur, message
 - Bouton **Appliquer** : extrait le ZIP dans `wp-content/themes/mademo/dist/`
 - Bouton **Rejeter** : supprime le ZIP
+- Bouton **Restaurer** : remet la sauvegarde créée avant le dernier build appliqué
 - Historique des 15 derniers déploiements
 
 **Sécurité**
 - Vérification `hash_equals()` anti-timing-attack
 - Contrôle anti path-traversal avant extraction ZIP
+- Validation du manifeste Vite et de chaque asset avant remplacement
+- Remplacement atomique avec sauvegarde de la version active
 - Nonce WordPress sur toutes les actions admin
 - Dossier de stockage inaccessible en HTTP (`.htaccess`)
 

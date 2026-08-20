@@ -2,6 +2,27 @@
 
 Scripts d'outillage pour Mademo Studio.
 
+## `wp-local.sh`
+
+Automatise une installation WordPress locale sans chemin codé dans `package.json`.
+
+```bash
+cp .env.example .env.local
+pnpm wp:setup       # dépendances + build + installation + activation + contrôles
+pnpm wp:deploy      # build + installation + contrôles
+pnpm wp:check       # vérifications uniquement
+```
+
+Le script crée une sauvegarde horodatée dans `wp-content/mademo-local-backups/` avant de remplacer le thème ou l'extension. Une erreur d'activation, de manifeste, de page d'accueil ou d'API déclenche la restauration des fichiers précédents.
+
+## `verify-dist.mjs`
+
+Valide le manifeste Vite et l'existence des assets avant packaging ou envoi en production :
+
+```bash
+pnpm verify:wp
+```
+
 ## `package-wordpress.sh`
 
 Compile React en cible WordPress et assemble deux ZIPs installables directement dans WordPress.
@@ -35,7 +56,7 @@ La version est lue depuis `wordpress/theme/mademo/style.css`.
 
 1. Vérifie que `zip` et `pnpm` sont disponibles
 2. Lance `BUILD_TARGET=wordpress pnpm build` → `wordpress/theme/mademo/dist/`
-3. Vérifie la présence de `dist/.vite/manifest.json`
+3. Vérifie le manifeste Vite et l'existence de tous les assets référencés
 4. Crée `mademo-theme-x.x.x.zip` depuis `wordpress/theme/mademo/`
 5. Crée `mademo-plugin-x.x.x.zip` depuis `wordpress/plugin/mademo-studio/`
 6. Affiche les instructions d'installation
@@ -51,4 +72,4 @@ La version est lue depuis `wordpress/theme/mademo/style.css`.
 
 - `zip` installé (`apt install zip` / `brew install zip`)
 - `pnpm` installé
-- `jq` installé (pour le manifest CI/CD — utilisé dans GitHub Actions)
+- WP-CLI et `rsync` pour l'installation locale automatisée
